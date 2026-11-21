@@ -757,6 +757,15 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     var tagsRefreshing by mutableStateOf(false)
         private set
 
+    /** 收藏页是否隐藏 Sketchy / NSFW 卡片（默认开启） */
+    var hideRestricted by mutableStateOf(store.hideRestrictedInFavorites)
+        private set
+
+    fun toggleHideRestricted() {
+        hideRestricted = !hideRestricted
+        store.hideRestrictedInFavorites = hideRestricted
+    }
+
     /** 收藏/云端收藏列表的滚动位置，返回时用来复位。 */
     var localScrollIndex: Int = 0
         private set

@@ -32,12 +32,17 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -80,6 +85,22 @@ fun FavoritesScreen(
     modifier: Modifier = Modifier,
 ) {
     var showCloud by rememberSaveable { mutableStateOf(false) }
+    var deleteStep by remember { mutableIntStateOf(0) }
+    var pendingUnfavorite by remember { mutableStateOf<Wallpaper?>(null) }
+    var unfavoriteStep by remember { mutableIntStateOf(0) }
+
+    val visibleFavorites = remember(library.favorites, library.hideRestricted) {
+        if (library.hideRestricted) library.favorites.filter { it.purity == "sfw" } else library.favorites
+    }
+    val hiddenLocalCount = library.favorites.size - visibleFavorites.size
+    val visibleCloud = remember(account.cloudFavorites, library.hideRestricted) {
+        if (library.hideRestricted) {
+            account.cloudFavorites.filter { it.purity == "sfw" }
+        } else {
+            account.cloudFavorites
+        }
+    }
+    val hiddenCloudCount = account.cloudFavorites.size - visibleCloud.size
 
     LaunchedEffect(Unit) {
         library.refreshFavoriteTags()
@@ -96,14 +117,22 @@ fun FavoritesScreen(
             subtitle = if (showCloud) {
                 if (account.loggedIn) {
                     val who = if (account.username.isBlank()) "账号" else "@${account.username}"
-                    "$who · ${account.cloudFavorites.size} 张"
+                    val hidden = if (hiddenCloudCount > 0) " · 已隐藏 $hiddenCloudCount 张限制级" else ""
+                    "$who · ${visibleCloud.size} 张$hidden"
                 } else {
                     "登录后可读取 wallhaven 账号里的收藏"
                 }
             } else {
-                "共 ${library.favorites.size} 张 · 只保存在这台手机上"
+                val hidden = if (hiddenLocalCount > 0) " · 已隐藏 $hiddenLocalCount 张限制级" else ""
+                "共 ${visibleFavorites.size} 张 · 只保存在这台手机上$hidden"
             },
             actions = {
+                GlassIconButton(
+                    icon = if (library.hideRestricted) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = if (library.hideRestricted) "显示限制级内容" else "隐藏限制级内容",
+                    onClick = { library.toggleHideRestricted() },
+                )
+                Spacer(Modifier.width(8.dp))
                 if (showCloud) {
                     if (account.loggedIn) {
                         GlassIconButton(
@@ -122,7 +151,7 @@ fun FavoritesScreen(
                     GlassIconButton(
                         icon = Icons.Filled.Delete,
                         contentDescription = "清空收藏",
-                        onClick = { library.clearFavorites() },
+                        onClick = { deleteStep = 1 },
                     )
                 }
             },
@@ -150,6 +179,7 @@ fun FavoritesScreen(
             CloudFavoritesContent(
                 library = library,
                 account = account,
+                items = visibleCloud,
                 onOpenLogin = onOpenLogin,
                 onOpenWallpaper = onOpenWallpaper,
                 modifier = Modifier.weight(1f),
@@ -157,19 +187,127 @@ fun FavoritesScreen(
         } else {
             LocalFavoritesContent(
                 library = library,
+                items = visibleFavorites,
                 onOpenWallpaper = onOpenWallpaper,
                 onOpenTag = onOpenTag,
+                onUnfavorite = { pendingUnfavorite = it },
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+
+    // 取消收藏：两次确认
+    pendingUnfavorite?.let { wallpaper ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingUnfavorite = null
+                unfavoriteStep = 0
+            },
+            containerColor = Pal.SurfaceAlt,
+            titleContentColor = Pal.Label,
+            textContentColor = Pal.LabelSecondary,
+            title = { Text(if (unfavoriteStep == 0) "取消收藏？" else "再确认一次") },
+            text = {
+                Text(
+                    if (unfavoriteStep == 0) {
+                        "「${wallpaper.displayResolution}」会从本地收藏里移除。"
+                    } else {
+                        "确定不再收藏这张壁纸吗？只影响这台手机上的收藏。"
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (unfavoriteStep == 0) {
+                            unfavoriteStep = 1
+                        } else {
+                            library.toggleFavorite(wallpaper)
+                            pendingUnfavorite = null
+                            unfavoriteStep = 0
+                        }
+                    },
+                ) {
+                    Text(
+                        text = if (unfavoriteStep == 0) "继续" else "取消收藏",
+                        color = Pal.Pink,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingUnfavorite = null
+                        unfavoriteStep = 0
+                    },
+                ) {
+                    Text("保留", color = Pal.LabelSecondary)
+                }
+            },
+        )
+    }
+
+    // 清空本地收藏：三次确认
+    if (deleteStep > 0) {
+        val total = library.favorites.size
+        AlertDialog(
+            onDismissRequest = { deleteStep = 0 },
+            containerColor = Pal.SurfaceAlt,
+            titleContentColor = Pal.Label,
+            textContentColor = Pal.LabelSecondary,
+            title = {
+                Text(
+                    when (deleteStep) {
+                        1 -> "清空本地收藏？"
+                        2 -> "再确认一次"
+                        else -> "最后确认"
+                    },
+                )
+            },
+            text = {
+                Text(
+                    when (deleteStep) {
+                        1 -> "会从这台手机上移除全部 $total 张收藏。账号里的收藏不受影响。"
+                        2 -> "这个操作不能撤销，删掉之后只能重新一张张收藏。确定继续吗？"
+                        else -> "真的要删除全部 $total 张收藏吗？"
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (deleteStep >= 3) {
+                            library.clearFavorites()
+                            deleteStep = 0
+                        } else {
+                            deleteStep += 1
+                        }
+                    },
+                ) {
+                    Text(
+                        text = if (deleteStep >= 3) "全部删除" else "继续",
+                        color = if (deleteStep >= 3) Pal.Pink else Pal.Accent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteStep = 0 }) {
+                    Text("取消", color = Pal.LabelSecondary)
+                }
+            },
+        )
     }
 }
 
 @Composable
 private fun LocalFavoritesContent(
     library: LibraryViewModel,
+    items: List<Wallpaper>,
     onOpenWallpaper: (String) -> Unit,
     onOpenTag: (String) -> Unit,
+    onUnfavorite: (Wallpaper) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -210,12 +348,12 @@ private fun LocalFavoritesContent(
         }
         Spacer(Modifier.height(6.dp))
         FeedGrid(
-            items = library.favorites,
+            items = items,
             isLoading = false,
             error = null,
             favoriteIds = library.favoriteIds,
             onItemClick = { onOpenWallpaper(it.id) },
-            onToggleFavorite = { library.toggleFavorite(it) },
+            onToggleFavorite = { onUnfavorite(it) },
             onRetry = {},
             onLoadMore = {},
             contentBottomPadding = tabBarContentPadding(),
@@ -223,7 +361,11 @@ private fun LocalFavoritesContent(
             initialIndex = library.localScrollIndex,
             initialOffset = library.localScrollOffset,
             onScrollChanged = { index, offset -> library.rememberLocalScroll(index, offset) },
-            emptyText = "还没有收藏任何壁纸\n在榜单或搜索里点卡片右上角的小心心就能收藏",
+            emptyText = if (library.favorites.isNotEmpty() && items.isEmpty()) {
+                "当前设置隐藏了 Sketchy / NSFW 内容\n点右上角的眼睛按钮就能显示"
+            } else {
+                "还没有收藏任何壁纸\n在榜单或搜索里点卡片右上角的小心心就能收藏"
+            },
         )
     }
 }
@@ -232,6 +374,7 @@ private fun LocalFavoritesContent(
 private fun CloudFavoritesContent(
     library: LibraryViewModel,
     account: AccountViewModel,
+    items: List<Wallpaper>,
     onOpenLogin: () -> Unit,
     onOpenWallpaper: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -272,7 +415,7 @@ private fun CloudFavoritesContent(
             }
         } else {
             FeedGrid(
-                items = account.cloudFavorites,
+                items = items,
                 isLoading = account.cloudLoading,
                 error = if (account.cloudFavorites.isEmpty()) null else error,
                 favoriteIds = emptySet(),
@@ -286,7 +429,11 @@ private fun CloudFavoritesContent(
                 initialIndex = library.cloudScrollIndex,
                 initialOffset = library.cloudScrollOffset,
                 onScrollChanged = { index, offset -> library.rememberCloudScroll(index, offset) },
-                emptyText = "账号里还没有收藏",
+                emptyText = if (account.cloudFavorites.isNotEmpty() && items.isEmpty()) {
+                    "当前设置隐藏了 Sketchy / NSFW 内容\n点右上角的眼睛按钮就能显示"
+                } else {
+                    "账号里还没有收藏"
+                },
             )
         }
     }

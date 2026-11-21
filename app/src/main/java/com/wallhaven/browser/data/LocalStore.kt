@@ -79,6 +79,13 @@ class LocalStore(context: Context) {
             prefs.edit().putBoolean(KEY_CARD_FULL, value).apply()
         }
 
+    /** 收藏页是否隐藏 Sketchy / NSFW 卡片（默认隐藏）。 */
+    var hideRestrictedInFavorites: Boolean
+        get() = prefs.getBoolean(KEY_HIDE_RESTRICTED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_HIDE_RESTRICTED, value).apply()
+        }
+
     private fun save(key: String, list: List<Wallpaper>) {
         prefs.edit().putString(key, json.encodeToString(ListSerializer(Wallpaper.serializer()), list)).apply()
     }
@@ -93,6 +100,7 @@ class LocalStore(context: Context) {
         const val KEY_HISTORY = "history_json"
         const val KEY_MATCH_DEVICE = "match_device_ratio"
         const val KEY_CARD_FULL = "card_preview_full"
+        const val KEY_HIDE_RESTRICTED = "favorites_hide_restricted"
         const val KEY_SEARCH_HISTORY = "search_history"
         const val MAX_HISTORY = 200
         const val MAX_SEARCH_HISTORY = 12
