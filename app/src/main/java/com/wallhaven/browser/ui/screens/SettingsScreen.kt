@@ -1,6 +1,7 @@
 package com.wallhaven.browser.ui.screens
 
 import android.widget.Toast
+import android.app.Application
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -36,6 +38,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import com.wallhaven.browser.data.LocalStore
 import com.wallhaven.browser.ui.components.LargeTitleHeader
@@ -60,10 +67,13 @@ import com.wallhaven.browser.ui.components.ListGroup
 import com.wallhaven.browser.ui.components.ListRow
 import com.wallhaven.browser.ui.components.LocalPreviewSettings
 import com.wallhaven.browser.ui.components.SectionCaption
+import com.wallhaven.browser.ui.components.UpdateDialog
 import com.wallhaven.browser.ui.components.tabBarContentPadding
 import com.wallhaven.browser.ui.theme.Pal
 import com.wallhaven.browser.ui.vm.AccountViewModel
 import com.wallhaven.browser.ui.vm.LibraryViewModel
+import com.wallhaven.browser.ui.vm.UpdateViewModel
+import com.wallhaven.browser.util.ApkInstaller
 import com.wallhaven.browser.util.AppLog
 import com.wallhaven.browser.util.DeviceProfile
 import com.wallhaven.browser.util.openUrl
@@ -85,6 +95,20 @@ fun SettingsScreen(
     val clipboard = LocalClipboardManager.current
     var confirmLogout by remember { mutableStateOf(false) }
     var showCredits by remember { mutableStateOf(false) }
+    var showUpdate by remember { mutableStateOf(false) }
+
+    val app = context.applicationContext as Application
+    val updateVm: UpdateViewModel = viewModel(factory = UpdateViewModel.factory(app))
+
+    // 从「允许安装未知应用」设置页回来时，自动继续安装
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) updateVm.refreshInstallPermission()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val configuration = LocalConfiguration.current
     val store = remember(context) { LocalStore(context) }
@@ -319,7 +343,19 @@ fun SettingsScreen(
                 icon = Icons.Filled.Info,
                 tint = Pal.LabelSecondary,
                 title = "版本",
-                body = "Wallhaven 壁纸 v1.7.9\n作者：Zero-zl-0（github.com/Zero-zl-0）\n数据来源：wallhaven.cc 公开 API v1\n收藏与历史保存在本机，卸载即删除。",
+                body = "Wallhaven 壁纸 v${updateVm.currentVersion}\n作者：Zero-zl-0（github.com/Zero-zl-0）\n数据来源：wallhaven.cc 公开 API v1\n收藏与历史保存在本机，卸载即删除。",
+            )
+            ListDivider()
+            ListRow(
+                title = "检查更新",
+                subtitle = "当前 v${updateVm.currentVersion} · 从 GitHub 获取最新版",
+                icon = Icons.Filled.Refresh,
+                iconTint = Pal.Accent,
+                showChevron = true,
+                onClick = {
+                    showUpdate = true
+                    updateVm.check()
+                },
             )
             ListDivider()
             ListRow(
@@ -341,6 +377,23 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(tabBarContentPadding()))
+    }
+
+    if (showUpdate) {
+        UpdateDialog(
+            state = updateVm.state,
+            currentVersion = updateVm.currentVersion,
+            needsInstallPermission = updateVm.needsInstallPermission,
+            onDownload = { updateVm.download() },
+            onInstall = { updateVm.installNow() },
+            onOpenRelease = { url -> openUrl(context, url) },
+            onOpenSettings = { ApkInstaller.openInstallPermissionSettings(context) },
+            onRetry = { updateVm.check() },
+            onDismiss = {
+                showUpdate = false
+                updateVm.reset()
+            },
+        )
     }
 
     if (showCredits) {

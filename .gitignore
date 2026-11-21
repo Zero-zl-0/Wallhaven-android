@@ -19,3 +19,6 @@ keystore/
 *.iml
 .DS_Store
 Thumbs.db
+
+# 构建日志
+build-log.txt

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 检查更新下载到 external-files/updates 下的 APK -->
+    <external-files-path name="updates" path="updates/" />
+    <cache-path name="cache" path="." />
+</paths>

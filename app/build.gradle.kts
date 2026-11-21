@@ -1,4 +1,4 @@
-﻿import java.util.Properties
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -20,8 +20,8 @@ android {
         applicationId = "com.wallhaven.browser"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.7.9"
+        versionCode = 19
+        versionName = "1.8.0"
     }
 
     signingConfigs {
@@ -60,6 +60,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
