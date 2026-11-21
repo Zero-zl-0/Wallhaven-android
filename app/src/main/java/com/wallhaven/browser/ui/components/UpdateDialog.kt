@@ -30,6 +30,7 @@ fun UpdateDialog(
     onDownload: () -> Unit,
     onInstall: () -> Unit,
     onOpenRelease: (String) -> Unit,
+    onOpenGithub: () -> Unit,
     onOpenSettings: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
@@ -142,7 +143,7 @@ fun UpdateDialog(
                         Text(text = state.message, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "可以稍后重试，或到 GitHub 手动下载安装包。",
+                            text = "如果系统弹 Play Protect 拦截，需要「仍要安装」，或在系统设置里临时关掉 Play Protect 扫描。也可以到 GitHub 手动下载。",
                             style = MaterialTheme.typography.labelSmall,
                             color = Pal.LabelTertiary,
                         )
@@ -199,14 +200,24 @@ fun UpdateDialog(
                 }
             }
         },
-        dismissButton = if (dismissible && state !is UpdateState.UpToDate) {
-            {
-                TextButton(onClick = onDismiss) {
-                    Text("稍后", color = Pal.LabelSecondary)
+        dismissButton = when {
+            state is UpdateState.Failed -> {
+                {
+                    TextButton(onClick = onOpenGithub) {
+                        Text("去 GitHub", color = Pal.LabelSecondary)
+                    }
                 }
             }
-        } else {
-            null
+
+            dismissible && state !is UpdateState.UpToDate -> {
+                {
+                    TextButton(onClick = onDismiss) {
+                        Text("稍后", color = Pal.LabelSecondary)
+                    }
+                }
+            }
+
+            else -> null
         },
     )
 }

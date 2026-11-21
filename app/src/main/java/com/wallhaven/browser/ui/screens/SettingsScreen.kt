@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import com.wallhaven.browser.data.LocalStore
+import com.wallhaven.browser.data.UpdateChecker
 import com.wallhaven.browser.ui.components.LargeTitleHeader
 import com.wallhaven.browser.ui.components.ListDivider
 import com.wallhaven.browser.ui.components.ListGroup
@@ -387,6 +388,7 @@ fun SettingsScreen(
             onDownload = { updateVm.download() },
             onInstall = { updateVm.installNow() },
             onOpenRelease = { url -> openUrl(context, url) },
+            onOpenGithub = { openUrl(context, UpdateChecker.REPO_URL + "/releases") },
             onOpenSettings = { ApkInstaller.openInstallPermissionSettings(context) },
             onRetry = { updateVm.check() },
             onDismiss = {
