@@ -1,0 +1,21 @@
+# Gradle / Android 构建产物
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+
+# 签名文件与密码（只放本机，绝不外传）
+keystore/
+*.jks
+*.keystore
+
+# 打包好的安装包（发布用 GitHub Releases，不放进仓库）
+*.apk
+*.aab
+
+# IDE / 系统
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
