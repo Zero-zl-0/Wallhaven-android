@@ -228,7 +228,44 @@ keyPassword=你的密码
 
 产物在 `app/build/outputs/apk/release/app-release.apk`。
 
-## 八、版本
+## 九、发版（维护者看这里）
+
+仓库已经配好 GitHub Actions：**推送 `v*` 形式的 tag 会自动编译正式包并创建 Release**，不需要手工上传 APK。
+
+每次发版三步：
+
+```bash
+# 1. 改版本号：app/build.gradle.kts 里 versionCode +1、versionName 改成新版本
+# 2. 提交
+git add -A && git commit -m "release: v1.8.2"
+
+# 3. 打 tag 并推送（tag 必须和 versionName 一致，带 v）
+git tag v1.8.2
+git push origin main --tags
+```
+
+推完 tag 后到仓库 **Actions** 页面看一眼，`Build & Release APK` 跑完就会自动出现 Release，里面的 `Wallhaven-v1.8.2.apk` 就是给「检查更新」用的。
+
+### 首次需要配一次 Secrets
+
+Actions 编译正式包需要你的签名文件（keystore 不进仓库），所以在仓库 **Settings → Secrets and variables → Actions** 里加 4 个 secret：
+
+| Secret 名 | 值 |
+|---|---|
+| `KEYSTORE_BASE64` | `keystore/wallhaven.jks` 的 base64（生成命令见下） |
+| `KEYSTORE_PASSWORD` | `keystore/keystore.properties` 里的 `storePassword` |
+| `KEY_ALIAS` | `keystore/keystore.properties` 里的 `keyAlias` |
+| `KEY_PASSWORD` | `keystore/keystore.properties` 里的 `keyPassword` |
+
+生成 base64 并在 PowerShell 里复制到剪贴板：
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("D:\projects\wallhavenTools\keystore\wallhaven.jks")) | Set-Clipboard
+```
+
+> 注意：keystore 放进 Secrets 意味着「谁拿到这个仓库的管理权限，理论上就能签出可覆盖安装的包」。介意的话可以不用 Actions，改成在本机 `./gradlew :app:assembleRelease`，再去网页手动建 Release 上传 APK。
+
+## 十、版本
 
 **v1.8.1**
 - 收藏页右上角新增眼睛按钮：**默认隐藏 Sketchy / NSFW 卡片**（设置会记住），点一下即可显示

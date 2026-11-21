@@ -1,0 +1,95 @@
+name: Build & Release APK
+
+# 推送 v1.8.2 这样的 tag 时自动：
+#   1. 用仓库里的 keystore（从 Secrets 读取）签出正式包
+#   2. 创建同名 Release 并上传 APK
+# 这样 App 里的「检查更新」就能直接下载安装
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
+          cat > keystore/keystore.properties <<EOF
+          storeFile=../keystore/release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Read version from gradle
+        id: version
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "versionName=$VERSION versionCode=$CODE"
+
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk \
+             "Wallhaven-v${{ steps.version.outputs.version }}.apk"
+
+      - name: Verify APK version
+        run: |
+          APK="Wallhaven-v${{ steps.version.outputs.version }}.apk"
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | head -1)
+          "$AAPT" dump badging "$APK" | head -1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            Wallhaven 壁纸 ${{ github.ref_name }}
+
+            - 版本：v${{ steps.version.outputs.version }}（versionCode ${{ steps.version.outputs.code }}）
+            - 安装包：`Wallhaven-v${{ steps.version.outputs.version }}.apk`
+
+            已经装了旧版本的话，在 App 里「设置 → 关于 → 检查更新」就能直接升级。
+          files: Wallhaven-v${{ steps.version.outputs.version }}.apk
+          fail_on_unmatched_files: true
